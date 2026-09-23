@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %}Control Testing Suite{% endblock %}</title>
+  <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='AppIcon.jpg') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="sidebar">
+      <div class="sidebar-brand">
+        <img src="{{ url_for('static', filename='AppIcon.jpg') }}" alt="" class="sidebar-icon" />
+        <span>Control Testing Suite</span>
+      </div>
+      <a href="{{ url_for('main.home') }}" class="{{ 'active' if request.endpoint == 'main.home' else '' }}">Home</a>
+      <a href="{{ url_for('main.oe_test_page') }}" class="{{ 'active' if request.endpoint == 'main.oe_test_page' else '' }}">OE Testing Assistant</a>
+      <a href="{{ url_for('main.anonymise_page') }}" class="{{ 'active' if request.endpoint == 'main.anonymise_page' else '' }}">AI Anonymisation</a>
+      <a href="{{ url_for('main.redact_page') }}" class="{{ 'active' if request.endpoint == 'main.redact_page' else '' }}">Manual Redaction</a>
+    </nav>
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

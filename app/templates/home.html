@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Home - Control Testing Suite{% endblock %}
+{% block content %}
+<div class="container home-container">
+  <div class="app-heading">
+    <img src="{{ url_for('static', filename='AppIcon.jpg') }}" alt="Control Testing" class="app-icon" />
+    <div>
+      <h1>Insignia GIA - Control Testing Suite</h1>
+      <p class="subtitle">Choose a module to get started</p>
+    </div>
+  </div>
+
+  <div class="module-grid">
+    <a class="module-card" href="{{ url_for('main.oe_test_page') }}">
+      <h2>OE Testing Assistant</h2>
+      <p>Extract and compute test fields from sample evidence using UnifiedAPI extraction &amp; inference, and produce an Excel working paper.</p>
+    </a>
+    <a class="module-card" href="{{ url_for('main.anonymise_page') }}">
+      <h2>AI Anonymisation</h2>
+      <p>Automatically detect and anonymise PII (emails, phone numbers, TFNs, driver licences) in up to 25 documents using UnifiedAPI's anonymisation service.</p>
+    </a>
+    <a class="module-card" href="{{ url_for('main.redact_page') }}">
+      <h2>Manual Redaction</h2>
+      <p>Define your own find-and-replace redaction rules (no AI) to mask or label matching text in Word, PowerPoint, Excel, and PDF files.</p>
+    </a>
+  </div>
+</div>
+{% endblock %}

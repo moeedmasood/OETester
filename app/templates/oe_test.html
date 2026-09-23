@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}OE Testing Assistant{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="app-heading">
+    <img src="{{ url_for('static', filename='AppIcon.jpg') }}" alt="Control Testing" class="app-icon" />
+    <div>
+      <h1>Operating Effectiveness Testing Assistant</h1>
+      <p class="subtitle">Powered by UnifiedAPI extraction &amp; inference</p>
+    </div>
+  </div>
+
+  <div id="limits-summary" class="limits-summary">
+    <h2>Form Limits</h2>
+    <ul>
+      <li>Text fields: max <strong>100 words</strong> each</li>
+      <li>File attachments: max <strong>15 MB</strong> per file</li>
+      <li>Extraction Structure: max <strong>10</strong> fields</li>
+      <li>Compute Structure: max <strong>5</strong> fields</li>
+      <li>Evidence / Sample Files: max <strong>25</strong> files</li>
+    </ul>
+  </div>
+
+  <form id="oe-form">
+    <fieldset>
+      <legend>Audit Metadata</legend>
+      <label>Audit Name *<input type="text" name="audit_name" required /><span class="word-count"></span></label>
+      <label>Test / Control Name *<input type="text" name="test_name" required /><span class="word-count"></span></label>
+      <label>Test Date *<input type="date" name="test_date" id="test_date" required /></label>
+      <label>Test Type *
+        <select name="test_type" required>
+          <option value="Design">Design</option>
+          <option value="OE Testing" selected>OE Testing</option>
+        </select>
+      </label>
+      <label>Test Objective<textarea name="test_objective" required></textarea><span class="word-count"></span></label>
+      <label>Population (optional)<input type="number" name="population" /></label>
+      <label>Sample Size (optional)<input type="number" name="sample_size" /></label>
+      <label>Justification for Sample<textarea name="justification_for_sample"></textarea><span class="word-count"></span></label>
+      <label>List of Samples (optional file)<input type="file" name="list_of_samples" accept=".xlsx,.xls,.csv,.pdf,.docx" /></label>
+      <p class="hint">If no List of Samples file is provided, all attached sample files/rows are processed. Max 15 MB.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Extraction Structure * <span class="limit-badge">max 10 fields</span></legend>
+      <p class="hint">Fields the Extraction model should pull out of each sample document. Mark one field as Primary - its value identifies the sample and is matched against the List of Samples file, if provided.</p>
+      <label class="radio"><input type="radio" name="extraction_fields_mode" value="manual" checked /> Add manually</label>
+      <label class="radio"><input type="radio" name="extraction_fields_mode" value="upload" /> Upload from file</label>
+      <div id="extraction-fields-manual">
+        <div id="extraction-fields" class="field-builder"></div>
+        <button type="button" class="add-field" data-target="extraction-fields">+ Add field</button>
+        <button type="button" class="download-fields" data-target="extraction-fields" data-name="extraction_structure">Download fields</button>
+      </div>
+      <div id="extraction-fields-upload" class="hidden">
+        <label>Extraction Structure File (.xlsx, .xls, .csv with name/type/description/primary columns; primary = true for exactly one row, max 10 rows, max 15 MB)
+          <input type="file" name="extraction_fields_file" accept=".xlsx,.xls,.csv" />
+        </label>
+      </div>
+      <datalist id="extraction-field-names"></datalist>
+    </fieldset>
+
+    <fieldset>
+      <legend>Compute Structure <span class="limit-badge">max 5 fields</span></legend>
+      <p class="hint">Fields to be derived/computed from the extracted data. Each compute field must reference 1-2 Extraction Structure fields it is computed from.</p>
+      <label class="radio"><input type="radio" name="compute_fields_mode" value="manual" checked /> Add manually</label>
+      <label class="radio"><input type="radio" name="compute_fields_mode" value="upload" /> Upload from file</label>
+      <div id="compute-fields-manual">
+        <div id="compute-fields" class="field-builder"></div>
+        <button type="button" class="add-field" data-target="compute-fields">+ Add field</button>
+        <button type="button" class="download-fields" data-target="compute-fields" data-name="compute_structure">Download fields</button>
+      </div>
+      <div id="compute-fields-upload" class="hidden">
+        <label>Compute Structure File (.xlsx, .xls, .csv with name/type/description/source_fields columns; source_fields = 1-2 extraction field names separated by "|", max 5 rows, max 15 MB)
+          <input type="file" name="compute_fields_file" accept=".xlsx,.xls,.csv" />
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Outcome &amp; Output</legend>
+      <label>Overall Pass/Fail Criteria *
+        <textarea name="overall_pass_fail_criteria" required placeholder="e.g. Pass if all samples show approval dated before the planned start date."></textarea><span class="word-count"></span>
+      </label>
+      <label>Sample Files (Evidence) * <span class="limit-badge">max 25 files, 15 MB each</span><input type="file" name="sample_files" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.tiff,.xlsx,.xls,.csv" multiple required /></label>
+      <p class="hint">Attach documents/images (one sample per file) and/or an Excel or CSV file with one sample per row.</p>
+      <label>Output File Name *<input type="text" name="output_filename" placeholder="OE_Test_Result.xlsx" required /><span class="word-count"></span></label>
+      <label class="checkbox"><input type="checkbox" name="ignore_sample_mismatch" /> Ignore sample count mismatch warning</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Evidence Consent *</legend>
+      <label class="checkbox consent">
+        <input type="checkbox" name="evidence_not_confidential" required />
+        I confirm that the evidence submitted is not Confidential, Highly Confidential, and/or personal information.
+      </label>
+      <label class="checkbox consent">
+        <input type="checkbox" name="evidence_manually_reviewed" required />
+        I confirm that I, as a human, have manually reviewed the evidence files for appropriateness.
+      </label>
+      <label>Human Reviewer's Name *<input type="text" name="human_reviewed_by" required /><span class="word-count"></span></label>
+      <label>Date Human Review Was Performed *<input type="date" name="human_review_date" required /></label>
+    </fieldset>
+
+    <button type="submit" id="submit-btn">Run OE Test</button>
+  </form>
+
+  <div id="progress" class="hidden">
+    <h2>Progress</h2>
+    <ul id="progress-steps"></ul>
+    <div id="progress-result"></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/oe_test.js') }}"></script>
+{% endblock %}

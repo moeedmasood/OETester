@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}AI Anonymisation{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="app-heading">
+    <img src="{{ url_for('static', filename='AppIcon.jpg') }}" alt="Control Testing" class="app-icon" />
+    <div>
+      <h1>AI Anonymisation</h1>
+      <p class="subtitle">Powered by UnifiedAPI anonymisation service</p>
+    </div>
+  </div>
+
+  <div class="limits-summary">
+    <h2>Form Limits</h2>
+    <ul>
+      <li>Files: max <strong>25</strong> per submission, <strong>15 MB</strong> each</li>
+      <li>Supported types: PDF, Word (.doc/.docx), PowerPoint (.ppt/.pptx), Excel (.xls/.xlsx)</li>
+      <li>Download links expire <strong>60 seconds</strong> after they appear - re-run if you miss the window</li>
+    </ul>
+  </div>
+
+  <form id="anonymise-form">
+    <fieldset>
+      <legend>Information to Anonymise *</legend>
+      <p class="hint">Select which types of personal information should be detected and redacted.</p>
+      <div class="checkbox-grid">
+        {% for entity, entity_label in entity_types %}
+        <label class="checkbox"><input type="checkbox" name="entity_types" value="{{ entity }}" /> {{ entity_label }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Files * <span class="limit-badge">max 25 files, 15 MB each</span></legend>
+      <label>Documents<input type="file" name="files" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx" multiple required /></label>
+      <p class="hint">Each file is sent through the anonymisation service one at a time.</p>
+    </fieldset>
+
+    <button type="submit" id="anonymise-submit-btn">Anonymise Files</button>
+  </form>
+
+  <div id="anonymise-progress" class="hidden">
+    <h2>Progress</h2>
+    <ul id="anonymise-progress-steps"></ul>
+    <div id="anonymise-results"></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/anonymise.js') }}"></script>
+{% endblock %}

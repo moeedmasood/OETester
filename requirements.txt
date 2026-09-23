@@ -1,0 +1,10 @@
+flask
+python-dotenv
+pandas
+openpyxl
+pydantic
+python-docx
+python-pptx
+pymupdf
+# ai_unified_api_client is an internal package; install it the same way you did
+# for the sherlock notebooks (already present in this machine's site-packages).

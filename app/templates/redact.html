@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Manual Redaction{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="app-heading">
+    <img src="{{ url_for('static', filename='AppIcon.jpg') }}" alt="Control Testing" class="app-icon" />
+    <div>
+      <h1>Manual Redaction</h1>
+      <p class="subtitle">Rule-based find &amp; redact - no AI involved</p>
+    </div>
+  </div>
+
+  <div class="limits-summary">
+    <h2>Form Limits</h2>
+    <ul>
+      <li>Files: max <strong>25</strong> per submission, <strong>15 MB</strong> each</li>
+      <li>Supported types: Word (.docx), PowerPoint (.pptx), Excel (.xlsx), PDF (.pdf)</li>
+      <li>Each rule is sense-checked so it can't accidentally redact everything</li>
+    </ul>
+  </div>
+
+  <form id="redact-form">
+    <fieldset>
+      <legend>Redaction Rules *</legend>
+      <p class="hint">
+        Define a format template or regular expression describing the data to redact. Format templates use
+        <code>9</code> = digit, <code>A</code> = uppercase letter, <code>a</code> = lowercase letter,
+        <code>X</code> = any letter, <code>*</code> = any letter/digit; any other character is matched literally.
+        E.g. <code>999 999 999</code> for a 9-digit TFN written with spaces. Use "Check" to sense-check a rule
+        before submitting - overly generic patterns (e.g. a single wildcard digit) are rejected.
+      </p>
+      <div id="redaction-rules"></div>
+      <button type="button" id="add-rule-btn" class="add-field">+ Add rule</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Files * <span class="limit-badge">max 25 files, 15 MB each</span></legend>
+      <label>Documents<input type="file" name="files" accept=".docx,.pptx,.xlsx,.pdf" multiple required /></label>
+    </fieldset>
+
+    <button type="submit" id="redact-submit-btn">Redact Files</button>
+  </form>
+
+  <div id="redact-progress" class="hidden">
+    <h2>Result</h2>
+    <div id="redact-results"></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/redact.js') }}"></script>
+{% endblock %}
