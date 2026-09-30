@@ -170,7 +170,10 @@ def run_oe_test(job: Job, form: dict[str, Any], output_folder: str, env: str, cl
         for row in sample_rows
     ]
     overall_conclusion = compute_overall_conclusion(
-        api, conclusion_summaries, form["overall_pass_fail_criteria"]
+        api,
+        conclusion_summaries,
+        form["overall_pass_fail_criteria"],
+        form.get("overall_conclusion_instructions", ""),
     )
 
     job.log("Writing output working paper...")

@@ -20,6 +20,7 @@ from .services.anonymisation_service import ENTITY_TYPES as ANONYMISE_ENTITY_TYP
 from .services.job_manager import create_job, get_job, run_in_background
 from .services.processing import run_oe_test
 from .services.redaction_service import build_rules, redact_files, validate_rule
+from .services.sensitivity_service import find_sensitivity_label
 from .services.unified_api_client import get_api
 
 bp = Blueprint("main", __name__)
@@ -41,7 +42,7 @@ MAX_REDACT_FILES = 25
 # Text/textarea fields on the form that are subject to the word-count limit.
 WORD_LIMITED_TEXT_FIELDS = [
     "audit_name", "test_name", "test_objective", "justification_for_sample",
-    "overall_pass_fail_criteria", "output_filename", "human_reviewed_by",
+    "overall_pass_fail_criteria", "overall_conclusion_instructions", "output_filename", "human_reviewed_by",
 ]
 
 
@@ -250,6 +251,16 @@ def submit():
     if invalid_samples:
         errors.append("Sample selection contains unsupported files: " + ", ".join(invalid_samples))
 
+    if form.get("check_sensitivity_labels") == "on":
+        for sample in uploaded_samples:
+            label = find_sensitivity_label(sample)
+            if label:
+                errors.append(
+                    f"Sample file '{sample.filename}' is marked with the sensitivity label "
+                    f"'{label}' and cannot be sent to AI models for extraction or inference. "
+                    "Remove or replace this file before resubmitting."
+                )
+
     if errors:
         return jsonify({"ok": False, "errors": errors}), 400
 
@@ -280,6 +291,7 @@ def submit():
         "sample_source": str(sample_upload_dir),
         "output_filename": form["output_filename"].strip(),
         "overall_pass_fail_criteria": form["overall_pass_fail_criteria"],
+        "overall_conclusion_instructions": form.get("overall_conclusion_instructions", "").strip(),
         "human_reviewed_by": form["human_reviewed_by"].strip(),
         "human_review_date": form["human_review_date"],
         "ignore_sample_mismatch": form.get("ignore_sample_mismatch") == "true",

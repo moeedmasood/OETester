@@ -81,6 +81,9 @@
       <label>Overall Pass/Fail Criteria *
         <textarea name="overall_pass_fail_criteria" required placeholder="e.g. Pass if all samples show approval dated before the planned start date."></textarea><span class="word-count"></span>
       </label>
+      <label> Instructions for Inference 
+        <textarea name="overall_conclusion_instructions">You are an internal audit assistant summarising Operating Effectiveness test results.</textarea><span class="word-count"></span>
+      </label>
       <label>Sample Files (Evidence) * <span class="limit-badge">max 25 files, 15 MB each</span><input type="file" name="sample_files" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.tiff,.xlsx,.xls,.csv" multiple required /></label>
       <p class="hint">Attach documents/images (one sample per file) and/or an Excel or CSV file with one sample per row.</p>
       <label>Output File Name *<input type="text" name="output_filename" placeholder="OE_Test_Result.xlsx" required /><span class="word-count"></span></label>
@@ -89,6 +92,10 @@
 
     <fieldset>
       <legend>Evidence Consent *</legend>
+      <label class="checkbox consent">
+        <input type="checkbox" name="check_sensitivity_labels" checked />
+        Check evidence files (Office/PDF) for Confidential, Highly Confidential, and Personal Information sensitivity labels before sending data to AI models for extraction or inference.
+      </label>
       <label class="checkbox consent">
         <input type="checkbox" name="evidence_not_confidential" required />
         I confirm that the evidence submitted is not Confidential, Highly Confidential, and/or personal information.
