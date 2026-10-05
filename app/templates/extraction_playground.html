@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Extraction Model Tester{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="app-heading">
+    <img src="{{ url_for('static', filename='AppIcon.jpg') }}" alt="Control Testing" class="app-icon" />
+    <div>
+      <h1>Extraction Model Tester</h1>
+      <p class="subtitle">Check whether your extraction works with a chosen model</p>
+    </div>
+  </div>
+
+  <div class="limits-summary">
+    <h2>Limits</h2>
+    <ul>
+      <li>One file at a time, max <strong>15 MB</strong> (pdf, doc, docx, png, jpg, jpeg, tiff, xlsx, xls, csv)</li>
+      <li>Up to <strong>10</strong> fields per run</li>
+    </ul>
+  </div>
+
+  <form id="ext-form">
+    <fieldset>
+      <legend>Model *</legend>
+      <select id="ext-model" name="model_id">
+        {% for m in models %}
+        <option value="{{ m.id }}" {{ 'selected' if m.id == 'amazon.nova-pro-v1:0' else '' }}>{{ m.name }} ({{ m.id }}) - {{ m.modalities | join(', ') }}</option>
+        {% endfor %}
+      </select>
+    </fieldset>
+
+    <fieldset>
+      <legend>File *</legend>
+      <input type="file" id="ext-file" name="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.tiff,.xlsx,.xls,.csv" required />
+    </fieldset>
+
+    <fieldset>
+      <legend>Fields to Extract *</legend>
+      <div id="ext-fields"></div>
+      <button type="button" id="ext-add-field" class="add-field">+ Add field</button>
+    </fieldset>
+
+    <button type="submit" id="submit-btn">Run Extraction</button>
+  </form>
+
+  <div id="ext-result" class="hidden">
+    <h2>Result</h2>
+    <div id="ext-error" class="error-box hidden"></div>
+    <table class="results-table hidden" id="ext-table">
+      <thead><tr><th>Field</th><th>Value</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/extraction_playground.js') }}"></script>
+{% endblock %}

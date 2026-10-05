@@ -8,6 +8,7 @@ from ai_unified_api_client.errors import APIError
 from ai_unified_api_client.unified_api import UnifiedAPI
 
 from .error_handling import NOT_EXTRACTED_NOTICE, friendly_api_error
+from .audit_log_service import audit_event
 from .schema_builder import build_pydantic_model
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,8 @@ def flag_missing_fields(extracted: dict[str, Any]) -> tuple[dict[str, Any], list
 
 
 def extract_sample(
-        api: UnifiedAPI, file_path: Path, extraction_fields: list[dict[str, Any]]
+        api: UnifiedAPI, file_path: Path, extraction_fields: list[dict[str, Any]],
+        model_id: str = "amazon.nova-pro-v1:0",
 ) -> tuple[dict[str, Any], list[str]]:
     """Extract structured data from one sample file according to extraction_fields.
 
@@ -34,13 +36,19 @@ def extract_sample(
     schema = ExtractionSchema.from_pydantic(model)
     service = api.extractor
     job_id = None
+    system_prompt = "You are an AI system responsible for extracting structured data from documents / images."
+    prompt = "Please extract the relevant fields from the provided document according to the specified schema."
+    audit_event(
+        "ai_extraction_request", file=file_path.name, model_id=model_id, fields=extraction_fields,
+        system_prompt=system_prompt, prompt=prompt,
+    )
     try:
         # Submit without waiting so we retain the job_id, letting us delete the
         # job (and its generated files) from the AI service once we're done with it.
         submitted = service.execute(
-            extraction_schema=schema, document=file_path, model_id="amazon.nova-pro-v1:0",
-            system_prompt="You are an AI system responsible for extracting structured data from documents / images.",
-            prompt="Please extract the relevant fields from the provided document according to the specified schema.",
+            extraction_schema=schema, document=file_path, model_id=model_id,
+            system_prompt=system_prompt,
+            prompt=prompt,
             wait=False,
         )
         job_id = submitted.job_id
@@ -48,6 +56,7 @@ def extract_sample(
         result = api.client.wait_for_job_completion(job_id=job_id, download_url=download_uri)
         response = ExtractionResponse.from_dict(result)
     except APIError as exc:
+        audit_event("ai_extraction_error", file=file_path.name, status_code=exc.status_code, error=str(exc))
         raise friendly_api_error(exc, f"Extraction of '{file_path.name}'") from exc
     finally:
         if job_id:
@@ -57,5 +66,6 @@ def extract_sample(
                 logger.warning("Failed to delete extraction job %s", job_id, exc_info=True)
 
     extracted = response.extraction_result or {}
+    audit_event("ai_extraction_response", file=file_path.name, job_id=job_id, raw_response=result, extraction_result=extracted)
     return flag_missing_fields(extracted)
 

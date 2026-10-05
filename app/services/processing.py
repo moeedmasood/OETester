@@ -1,10 +1,12 @@
 """Orchestrates the end-to-end OE testing workflow for one job."""
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 
 import pandas as pd
 
+from .audit_log_service import audit_event
 from .compute_service import compute_overall_conclusion, compute_sample
 from .error_handling import SUPPORT_CONTACT
 from .excel_writer import write_working_paper
@@ -112,10 +114,12 @@ def run_oe_test(job: Job, form: dict[str, Any], output_folder: str, env: str, cl
                 extracted, missing_fields = extract_sample(api, sample.file_path, extraction_fields)
         except Exception as exc:
             job.log(f"Extraction failed for {sample.label}: {exc}")
+            audit_event("sample_error", stage="extraction", sample=sample.label, error=str(exc), exception_type=type(exc).__name__, traceback=traceback.format_exc())
             sample_rows.append({"Sample": sample.label, "pass_fail": "Fail", "rationale": str(exc)})
             continue
 
         if missing_fields:
+            audit_event("missing_fields", sample=sample.label, fields=missing_fields)
             job.log(
                 f"Warning: could not extract fields {', '.join(missing_fields)} for "
                 f"{sample.label}. Contact {SUPPORT_CONTACT} if this persists."
@@ -158,6 +162,7 @@ def run_oe_test(job: Job, form: dict[str, Any], output_folder: str, env: str, cl
             )
         except Exception as exc:
             job.log(f"Computation failed for {sample.label}: {exc}")
+            audit_event("sample_error", stage="computation", sample=sample.label, error=str(exc), exception_type=type(exc).__name__, traceback=traceback.format_exc())
             sample_rows.append({"Sample": sample.label, **extracted, "pass_fail": "Fail", "rationale": str(exc)})
             continue
 

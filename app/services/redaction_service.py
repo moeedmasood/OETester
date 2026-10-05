@@ -45,6 +45,46 @@ class RedactionRule:
     regex: re.Pattern
 
 
+_IPV4_OCTET = r"(?:25[0-5]|2[0-4]\d|1?\d?\d)"
+
+# Fixed-format, vetted patterns. Order matters: more specific patterns run first so e.g. a URL
+# containing an e-mail-like string is redacted as a whole.
+PRESET_PATTERNS: list[dict[str, str]] = [
+    {"id": "jwt", "label": "JWT_TOKEN", "name": "JWT tokens",
+     "regex": r"\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*"},
+    {"id": "secret", "label": "SECRET_KEY", "name": "Secrets / API keys",
+     "regex": r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|\bgh[pousr]_[A-Za-z0-9]{36,}\b|\bsk-[A-Za-z0-9_-]{20,}"
+              r"|(?i:\b(?:api[_-]?key|secret(?:[_-]?key)?|access[_-]?token|auth[_-]?token|password|passwd|pwd)\b"
+              r"\s*[:=]\s*[^\s,;]+)|(?i:\bbearer\s+[A-Za-z0-9._~+/=-]{16,})"},
+    {"id": "url", "label": "URL", "name": "URLs",
+     "regex": r"\b(?:https?|ftp)://[^\s<>\"')\]]+|\bwww\.[^\s<>\"')\]]+"},
+    {"id": "email", "label": "EMAIL_ADDRESS", "name": "Email addresses",
+     "regex": r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"},
+    {"id": "iban", "label": "IBAN", "name": "IBAN (international bank account number)",
+     "regex": r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b"},
+    {"id": "au_bank", "label": "AU_BANK_ACCOUNT", "name": "Australian BSB + account number (e.g. 062-000 12345678)",
+     "regex": r"(?<!\d)\d{3}[- ]?\d{3}[ -]\d{6,10}(?!\d)"},
+    {"id": "au_bsb", "label": "AU_BSB", "name": "Australian BSB (e.g. 062-000)",
+     "regex": r"(?<!\d)\d{3}-\d{3}(?![\d-])"},
+    {"id": "card", "label": "CREDIT_CARD", "name": "Credit card numbers (Visa, Mastercard, Amex, Discover)",
+     "regex": r"(?<!\d)(?:4\d{3}|5[1-5]\d{2}|2[2-7]\d{2}|6011|65\d{2})(?:[ -]?\d{4}){3}(?!\d)"
+              r"|(?<!\d)3[47]\d{2}[ -]?\d{6}[ -]?\d{5}(?!\d)"},
+    {"id": "abn", "label": "ABN", "name": "Australian Business Number (e.g. 12 345 678 901)",
+     "regex": r"(?<!\d)\d{2} \d{3} \d{3} \d{3}(?!\d)"},
+    {"id": "ipv4", "label": "IP_ADDRESS", "name": "IPv4 addresses",
+     "regex": rf"(?<![\d.])(?:{_IPV4_OCTET}\.){{3}}{_IPV4_OCTET}(?![\d.])"},
+    {"id": "ipv6", "label": "IPV6_ADDRESS", "name": "IPv6 addresses",
+     "regex": r"(?<![:\w])(?:(?:[A-Fa-f0-9]{1,4}:){7}[A-Fa-f0-9]{1,4}"
+              r"|(?:[A-Fa-f0-9]{1,4}:){1,7}:(?:[A-Fa-f0-9]{1,4}(?::[A-Fa-f0-9]{1,4}){0,6})?"
+              r"|::(?:[A-Fa-f0-9]{1,4}(?::[A-Fa-f0-9]{1,4}){0,6}))(?![:\w])"},
+    {"id": "mac", "label": "MAC_ADDRESS", "name": "MAC addresses",
+     "regex": r"(?<![0-9A-Fa-f:-])(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}(?![0-9A-Fa-f:-])"},
+    {"id": "uuid", "label": "UUID", "name": "UUIDs / GUIDs",
+     "regex": r"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b"},
+]
+_PRESETS_BY_ID = {p["id"]: p for p in PRESET_PATTERNS}
+
+
 def format_to_regex(fmt: str) -> str:
     """Translates a 9/A/a/X/* placeholder format into a word-bounded regex."""
     parts = [FORMAT_TOKEN_MAP.get(ch, re.escape(ch)) for ch in fmt]
@@ -101,6 +141,17 @@ def build_rules(raw_rules: list[dict]) -> tuple[list[RedactionRule], list[str]]:
     rules: list[RedactionRule] = []
     errors: list[str] = []
     for r in raw_rules:
+        preset = _PRESETS_BY_ID.get(str(r.get("preset", "")))
+        if preset:
+            mode = r.get("mode", "mask")
+            rules.append(RedactionRule(
+                label=preset["label"], pattern_type="regex", pattern=preset["regex"],
+                mode=mode if mode in {"mask", "label"} else "mask", regex=re.compile(preset["regex"]),
+            ))
+            continue
+        if r.get("preset"):
+            errors.append(f"Unknown preset '{r['preset']}'.")
+            continue
         label = str(r.get("label", "")).strip()
         pattern_type = r.get("pattern_type", "format")
         pattern = str(r.get("pattern", "")).strip()

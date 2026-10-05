@@ -21,7 +21,23 @@
 
   <form id="redact-form">
     <fieldset>
-      <legend>Redaction Rules *</legend>
+      <legend>Common Formats</legend>
+      <p class="hint">Tick any standard fixed-format data to redact. These use pre-tested patterns and can be combined with custom rules below.</p>
+      <div class="checkbox-grid">
+        {% for p in presets %}
+        <label class="checkbox"><input type="checkbox" class="preset-check" value="{{ p.id }}" /> {{ p.name }}</label>
+        {% endfor %}
+      </div>
+      <label>Replace preset matches with
+        <select id="preset-mode">
+          <option value="mask">Mask (xxxxxxxxx)</option>
+          <option value="label">Label (&lt;TAG&gt;)</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Custom Redaction Rules</legend>
       <p class="hint">
         Define a format template or regular expression describing the data to redact. Format templates use
         <code>9</code> = digit, <code>A</code> = uppercase letter, <code>a</code> = lowercase letter,

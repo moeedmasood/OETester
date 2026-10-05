@@ -1,3 +1,4 @@
+import hmac
 import json
 import re
 from pathlib import Path
@@ -7,19 +8,26 @@ from uuid import uuid4
 import pandas as pd
 from flask import (
     Blueprint,
+    Response,
     current_app,
     jsonify,
+    redirect,
     render_template,
     request,
     send_from_directory,
+    url_for,
 )
+from ai_unified_api_client.errors import APIError
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
 from .services.anonymisation_service import ENTITY_TYPES as ANONYMISE_ENTITY_TYPES, anonymise_files
+from .services.audit_log_service import audit_run, is_audit_enabled, set_audit_enabled
+from .services.error_handling import friendly_api_error
+from .services.extraction_service import extract_sample
 from .services.job_manager import create_job, get_job, run_in_background
 from .services.processing import run_oe_test
-from .services.redaction_service import build_rules, redact_files, validate_rule
+from .services.redaction_service import PRESET_PATTERNS, build_rules, redact_files, validate_rule
 from .services.sensitivity_service import find_sensitivity_label
 from .services.unified_api_client import get_api
 
@@ -125,9 +133,152 @@ def anonymise_page():
     return render_template("anonymise.html", entity_types=entities)
 
 
+def _admin_authorised() -> bool:
+    password = current_app.config.get("ADMIN_PASSWORD")
+    if not password:
+        return request.remote_addr in {"127.0.0.1", "::1"}
+    auth = request.authorization
+    return bool(auth and hmac.compare_digest((auth.password or "").encode(), password.encode()))
+
+
+def _admin_denied():
+    if current_app.config.get("ADMIN_PASSWORD"):
+        return Response("Admin login required.", 401, {"WWW-Authenticate": 'Basic realm="Admin"'})
+    return Response("Admin settings are only available from the server itself unless ADMIN_PASSWORD is set.", 403)
+
+
+@bp.route("/admin/settings", methods=["GET", "POST"])
+def admin_settings():
+    if not _admin_authorised():
+        return _admin_denied()
+    settings_file = current_app.config["SETTINGS_FILE"]
+    if request.method == "POST":
+        set_audit_enabled(settings_file, request.form.get("audit_logging_enabled") == "on")
+        return redirect(url_for("main.admin_settings", saved=1))
+    return render_template(
+        "admin_settings.html",
+        audit_enabled=is_audit_enabled(settings_file),
+        log_folder=current_app.config["AUDIT_LOG_FOLDER"],
+        saved=request.args.get("saved") == "1",
+    )
+
+
 @bp.route("/redact", methods=["GET"])
 def redact_page():
-    return render_template("redact.html")
+    return render_template("redact.html", presets=PRESET_PATTERNS)
+
+
+_MODELS_FILE = Path(__file__).parent / "data" / "models.json"
+MAX_CHAT_MESSAGES = 50
+MAX_CHAT_CHARS = 20000
+
+
+def _load_models() -> list[dict[str, Any]]:
+    return json.loads(_MODELS_FILE.read_text(encoding="utf-8"))
+
+
+def _model_ids(extraction: bool = False) -> set[str]:
+    # Speech-only-capable models cannot read documents.
+    return {m["id"] for m in _load_models() if not (extraction and "SPEECH" in m["modalities"])}
+
+
+@bp.route("/playground/inference", methods=["GET"])
+def inference_playground_page():
+    return render_template("inference_playground.html", models=_load_models())
+
+
+@bp.route("/playground/extraction", methods=["GET"])
+def extraction_playground_page():
+    models = [m for m in _load_models() if "SPEECH" not in m["modalities"]]
+    return render_template("extraction_playground.html", models=models)
+
+
+@bp.route("/playground/inference/chat", methods=["POST"])
+def inference_chat():
+    data = request.get_json(silent=True) or {}
+    model_id = str(data.get("model_id", ""))
+    messages = data.get("messages")
+    if model_id not in _model_ids():
+        return jsonify({"ok": False, "error": "Select a valid model."}), 400
+    if (
+        not isinstance(messages, list) or not messages or len(messages) > MAX_CHAT_MESSAGES
+        or any(not isinstance(m, dict) or m.get("role") not in {"user", "assistant"}
+               or not isinstance(m.get("content"), str) for m in messages)
+        or messages[-1]["role"] != "user"
+    ):
+        return jsonify({"ok": False, "error": "Invalid conversation."}), 400
+    if sum(len(m["content"]) for m in messages) > MAX_CHAT_CHARS:
+        return jsonify({"ok": False, "error": f"Conversation is too long (max {MAX_CHAT_CHARS} characters). Clear the chat."}), 400
+
+    # The inference endpoint takes a single prompt, so prior turns are sent as a transcript.
+    if len(messages) == 1:
+        prompt = messages[0]["content"]
+    else:
+        transcript = "\n\n".join(
+            f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}" for m in messages
+        )
+        prompt = f"Conversation so far:\n{transcript}\n\nReply as the Assistant to the latest User message."
+
+    cfg = current_app.config
+    try:
+        api = get_api(cfg["UNIFIED_API_ENV"], cfg["CLIENT_ID"], cfg["CLIENT_SECRET"])
+        response = api.inference.execute(
+            prompt=prompt, model_id=model_id, system_prompt="You are a helpful assistant."
+        )
+    except APIError as exc:
+        return jsonify({"ok": False, "error": str(friendly_api_error(exc, "Chat request"))}), 502
+    except Exception as exc:
+        current_app.logger.exception("Inference playground failed")
+        return jsonify({"ok": False, "error": f"Request failed: {type(exc).__name__}"}), 500
+    return jsonify({"ok": True, "reply": response.text or ""})
+
+
+@bp.route("/playground/extraction/run", methods=["POST"])
+def extraction_playground_run():
+    model_id = request.form.get("model_id", "")
+    file = request.files.get("file")
+    try:
+        fields = json.loads(request.form.get("fields_json", "[]"))
+    except json.JSONDecodeError:
+        fields = []
+    fields = [
+        {"name": str(f.get("name", "")).strip(), "type": str(f.get("type", "str")), "description": str(f.get("description", ""))}
+        for f in fields if isinstance(f, dict) and str(f.get("name", "")).strip()
+    ]
+
+    errors = []
+    if model_id not in _model_ids(extraction=True):
+        errors.append("Select a valid model.")
+    if not file or not file.filename:
+        errors.append("Upload a file to extract from.")
+    elif not _allowed_sample_file(file.filename):
+        errors.append("Unsupported file type.")
+    elif _file_size(file) > MAX_FILE_SIZE_BYTES:
+        errors.append(f"File exceeds the {MAX_FILE_SIZE_MB} MB limit.")
+    if not fields:
+        errors.append("Define at least one field to extract.")
+    elif len(fields) > MAX_EXTRACTION_FIELDS:
+        errors.append(f"At most {MAX_EXTRACTION_FIELDS} fields are allowed.")
+    if errors:
+        return jsonify({"ok": False, "error": " ".join(errors)}), 400
+
+    batch_dir = Path(current_app.config["UPLOAD_FOLDER"]) / f"playground_{uuid4().hex}"
+    batch_dir.mkdir(parents=True, exist_ok=True)
+    path = batch_dir / secure_filename(Path(file.filename).name)
+    file.save(path)
+
+    cfg = current_app.config
+    try:
+        api = get_api(cfg["UNIFIED_API_ENV"], cfg["CLIENT_ID"], cfg["CLIENT_SECRET"])
+        extracted, missing = extract_sample(api, path, fields, model_id=model_id)
+    except Exception as exc:
+        current_app.logger.exception("Extraction playground failed")
+        message = str(exc) if isinstance(exc, RuntimeError) else f"Extraction failed: {type(exc).__name__}"
+        return jsonify({"ok": False, "error": message}), 500
+    finally:
+        path.unlink(missing_ok=True)
+        batch_dir.rmdir()
+    return jsonify({"ok": True, "result": extracted, "missing": missing})
 
 
 @bp.route("/parse-fields-file", methods=["POST"])
@@ -302,12 +453,21 @@ def submit():
 
     job = create_job()
     cfg = current_app.config
-    run_in_background(
-        job,
-        lambda j: run_oe_test(
-            j, job_data, cfg["OUTPUT_FOLDER"], cfg["UNIFIED_API_ENV"], cfg["CLIENT_ID"], cfg["CLIENT_SECRET"]
-        ),
-    )
+    audit_enabled = is_audit_enabled(cfg["SETTINGS_FILE"])
+    audit_inputs = {
+        **{k: v for k, v in job_data.items() if k not in {"sample_source", "list_of_samples_path"}},
+        "sample_files": [s.filename for s in uploaded_samples],
+        "list_of_samples_file": list_file.filename if list_of_samples_path else None,
+        "client_ip": request.remote_addr,
+    }
+
+    def _run(j):
+        with audit_run(audit_enabled, cfg["AUDIT_LOG_FOLDER"], j.id, audit_inputs):
+            return run_oe_test(
+                j, job_data, cfg["OUTPUT_FOLDER"], cfg["UNIFIED_API_ENV"], cfg["CLIENT_ID"], cfg["CLIENT_SECRET"]
+            )
+
+    run_in_background(job, _run)
     return jsonify({"ok": True, "job_id": job.id})
 
 

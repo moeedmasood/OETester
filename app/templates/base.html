@@ -18,6 +18,11 @@
       <a href="{{ url_for('main.oe_test_page') }}" class="{{ 'active' if request.endpoint == 'main.oe_test_page' else '' }}">OE Testing Assistant</a>
       <a href="{{ url_for('main.anonymise_page') }}" class="{{ 'active' if request.endpoint == 'main.anonymise_page' else '' }}">AI Anonymisation</a>
       <a href="{{ url_for('main.redact_page') }}" class="{{ 'active' if request.endpoint == 'main.redact_page' else '' }}">Manual Redaction</a>
+      <div class="sidebar-section">Testing / Playgrounds</div>
+      <a href="{{ url_for('main.inference_playground_page') }}" class="{{ 'active' if request.endpoint == 'main.inference_playground_page' else '' }}">Inference Model Tester</a>
+      <a href="{{ url_for('main.extraction_playground_page') }}" class="{{ 'active' if request.endpoint == 'main.extraction_playground_page' else '' }}">Extraction Model Tester</a>
+      <div class="sidebar-section">Administration</div>
+      <a href="{{ url_for('main.admin_settings') }}" class="{{ 'active' if request.endpoint == 'main.admin_settings' else '' }}">Admin Settings</a>
     </nav>
     <main class="main-content">
       {% block content %}{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Inference Model Tester{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="app-heading">
+    <img src="{{ url_for('static', filename='AppIcon.jpg') }}" alt="Control Testing" class="app-icon" />
+    <div>
+      <h1>Inference Model Tester</h1>
+      <p class="subtitle">Chat with one model at a time</p>
+    </div>
+  </div>
+
+  <label>Model
+    <select id="chat-model">
+      {% for m in models %}
+      <option value="{{ m.id }}" data-use="{{ m.use_case }}">{{ m.name }} ({{ m.id }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <p class="hint" id="model-use"></p>
+
+  <div class="chat-window">
+    <div id="chat-log" class="chat-log">
+      <div class="chat-empty">Send a message to start the conversation.</div>
+    </div>
+    <form id="chat-form" class="chat-input">
+      <textarea id="chat-text" rows="2" placeholder="Type a message... (Enter to send, Shift+Enter for new line)" required></textarea>
+      <button type="submit" id="chat-send">Send</button>
+      <button type="button" id="chat-clear" class="secondary-btn">Clear</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/inference_playground.js') }}"></script>
+{% endblock %}

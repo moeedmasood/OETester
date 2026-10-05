@@ -24,5 +24,17 @@
       <p>Define your own find-and-replace redaction rules (no AI) to mask or label matching text in Word, PowerPoint, Excel, and PDF files.</p>
     </a>
   </div>
+
+  <h2 class="section-heading">Testing / Playgrounds</h2>
+  <div class="module-grid">
+    <a class="module-card" href="{{ url_for('main.inference_playground_page') }}">
+      <h2>Inference Model Tester</h2>
+      <p>Chat with any available model, one at a time, to see how it responds to your prompts.</p>
+    </a>
+    <a class="module-card" href="{{ url_for('main.extraction_playground_page') }}">
+      <h2>Extraction Model Tester</h2>
+      <p>Upload a single file, define the fields to extract and check the result with your chosen model.</p>
+    </a>
+  </div>
 </div>
 {% endblock %}

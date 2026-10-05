@@ -14,6 +14,7 @@ from ai_unified_api_client.errors import APIError
 from ai_unified_api_client.unified_api import UnifiedAPI
 
 from .error_handling import friendly_api_error
+from .audit_log_service import audit_event
 
 _MODEL_ID = "au.anthropic.claude-haiku-4-5-20251001-v1:0"
 # Haiku is not an auto_thinking model, so Inference.execute() always returns
@@ -35,6 +36,18 @@ DEFAULT_OVERALL_CONCLUSION_INSTRUCTIONS = (
     "test, stating the overall outcome and any notable exceptions. Respond with plain text, "
     "not JSON."
 )
+
+
+def _infer(api: UnifiedAPI, purpose: str, prompt: str, system_prompt: str):
+    """Runs one inference call, recording the prompt, response and any API error in the audit log."""
+    audit_event("ai_inference_request", purpose=purpose, model_id=_MODEL_ID, system_prompt=system_prompt, prompt=prompt)
+    try:
+        response = api.inference.execute(prompt=prompt, system_prompt=system_prompt, model_id=_MODEL_ID)
+    except APIError as exc:
+        audit_event("ai_inference_error", purpose=purpose, status_code=exc.status_code, error=str(exc))
+        raise
+    audit_event("ai_inference_response", purpose=purpose, response=response.text)
+    return response
 
 
 def _parse_json_response(text: str) -> dict[str, Any]:
@@ -71,7 +84,7 @@ def compute_field(
         f"Return a JSON object with exactly one key: \"{field['name']}\"."
     )
     try:
-        response = api.inference.execute(prompt=prompt, system_prompt=_JSON_SYSTEM_PROMPT, model_id=_MODEL_ID)
+        response = _infer(api, f"compute_field:{field['name']}", prompt, _JSON_SYSTEM_PROMPT)
     except APIError as exc:
         raise friendly_api_error(exc, f"Computing field '{field['name']}'") from exc
     return _parse_json_response(response.text or "").get(field["name"])
@@ -95,7 +108,7 @@ def compute_pass_fail(
         "\"rationale\" must briefly explain the pass/fail decision."
     )
     try:
-        response = api.inference.execute(prompt=prompt, system_prompt=_JSON_SYSTEM_PROMPT, model_id=_MODEL_ID)
+        response = _infer(api, "pass_fail", prompt, _JSON_SYSTEM_PROMPT)
     except APIError as exc:
         raise friendly_api_error(exc, "Evaluating pass/fail outcome") from exc
     return _parse_json_response(response.text or "")
@@ -143,11 +156,7 @@ def compute_overall_conclusion(
     my_system_prompt = instructions.strip() or "You are an internal audit assistant summarising Operating Effectiveness test results."
 
     try:
-        response = api.inference.execute(
-            prompt=prompt,
-            system_prompt=my_system_prompt,
-            model_id=_MODEL_ID,
-        )
+        response = _infer(api, "overall_conclusion", prompt, my_system_prompt)
     except APIError as exc:
         raise friendly_api_error(exc, "Computing overall conclusion") from exc
     return (response.text or "").strip()

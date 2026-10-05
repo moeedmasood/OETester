@@ -88,7 +88,9 @@ addRuleBtn.addEventListener("click", () => addRuleRow());
 addRuleRow();
 
 function collectRules() {
-  return Array.from(rulesContainer.querySelectorAll(".rule-row"))
+  const mode = document.getElementById("preset-mode").value;
+  const presets = Array.from(document.querySelectorAll(".preset-check:checked")).map((c) => ({ preset: c.value, mode }));
+  const custom = Array.from(rulesContainer.querySelectorAll(".rule-row"))
     .map((row) => ({
       label: row.querySelector(".rule-label").value.trim(),
       pattern_type: row.querySelector(".rule-type").value,
@@ -96,6 +98,7 @@ function collectRules() {
       mode: row.querySelector(".rule-mode").value,
     }))
     .filter((r) => r.label && r.pattern);
+  return [...presets, ...custom];
 }
 
 const filesInput = form.querySelector('input[name="files"]');
@@ -165,7 +168,7 @@ form.addEventListener("submit", async (event) => {
   }
   const rules = collectRules();
   if (!rules.length) {
-    alert("Add at least one redaction rule with a label and pattern.");
+    alert("Tick at least one common format or add a custom rule with a label and pattern.");
     return;
   }
 
